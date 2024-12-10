@@ -67,11 +67,6 @@ namespace Laboration_2._databaser
             Console.WriteLine("2. Lägg till böcker i lager");
             Console.WriteLine("3. Ta bort böcker från lager");
             Console.WriteLine("4. Lista böcker");
-            Console.WriteLine("5. Lägg till nya böcker i sortiment");
-            Console.WriteLine("6. Ta bort böcker från sortiment");
-            Console.WriteLine("7. Lägg till författare");
-            Console.WriteLine("8. Ta bort författare");
-            Console.WriteLine("0. Avsluta");
         }
 
     }
