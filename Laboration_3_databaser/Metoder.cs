@@ -8,205 +8,200 @@ namespace Laboration_3_databaser
 {
     public static class Metoder
     {
-        // Samlingar för Butiker, Lagersaldo och Böcker
-        private static readonly IMongoCollection<Butiker> butikerCollection = DatabaseManager.GetButikerCollection();  // Stark typ
-        private static readonly IMongoCollection<Lagersaldo> lagersaldoCollection = DatabaseManager.GetLagersaldoCollection(); // Stark typ
-        private static readonly IMongoCollection<Böcker> booksCollection = DatabaseManager.GetBooksCollection(); // Stark typ
+        // Anslut till MongoDB och hämta kollektionen 'sortiment'
 
-        public static void ListInventoryForStore()
+        private static List<BsonDocument> kundvagn = new List<BsonDocument>();
+        private static IMongoCollection<BsonDocument> GetSortimentCollection()
         {
             try
             {
-                // Använd starkt typad samling här
-                var inventory = lagersaldoCollection.Aggregate()
-                    .Lookup(
-                        "Böcker",        // Samling: Böcker
-                        "ISBN",          // Fält i Lagersaldo
-                        "_id",           // Matchande fält i Böcker
-                        "BöckerInfo"     // Alias för resultat
-                    )
-                    .Lookup(
-                        "Butiker",       // Samling: Butiker
-                        "ButikId",       // Fält i Lagersaldo
-                        "_id",           // Matchande fält i Butiker
-                        "ButikerInfo"    // Alias för resultat
-                    )
-                    .As<BsonDocument>()
-                    .ToList();
+                var client = new MongoClient("mongodb+srv://david:123@school.37vmr.mongodb.net/");
+                var database = client.GetDatabase("Butik");
+                var collection = database.GetCollection<BsonDocument>("Sortiment");
+                return collection;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ett fel uppstod vid anslutning till databasen: {ex.Message}");
+                throw;
+            }
+        }
 
-                // Logga resultat efter Lookup för felsökning
-                Console.WriteLine("Efter Lookup:");
-                foreach (var doc in inventory)
+        // Metod för att visa alla produkter i sortimentet
+        public static void ListInventory()
+        {
+            try
+            {
+                var sortimentCollection = GetSortimentCollection();
+
+                // Hämta och sortera alla produkter från kollektionen (sorterar efter namn)
+                var allProducts = sortimentCollection.Find(new BsonDocument())
+                                                     .SortBy(product => product["name"])
+                                                     .ToList();
+
+                Console.WriteLine("\nProdukter i sortimentet:");
+                Console.WriteLine("------------------------------------------------------------");
+                Console.WriteLine("{0,-5} {1,-25} {2,10} {3,24}", "Nr", "Namn", "Pris (SEK)", "ID");
+                Console.WriteLine("------------------------------------------------------------");
+
+                if (allProducts.Count == 0)
                 {
-                    Console.WriteLine(doc.ToJson());
-                }
-
-                // Filtrera och hantera dokument
-                var filteredInventory = inventory
-                    .Where(doc =>
-                        doc.Contains("ButikerInfo") && doc["ButikerInfo"].AsBsonArray.Count > 0 &&
-                        doc.Contains("BöckerInfo") && doc["BöckerInfo"].AsBsonArray.Count > 0)
-                    .GroupBy(doc => doc["ButikerInfo"][0]["Butiksnamn"].AsString)
-                    .Select(group => new
-                    {
-                        StoreName = group.Key,
-                        Books = group.Select(g => new
-                        {
-                            Isbn = g["BöckerInfo"][0]["_id"].AsString,  // Hämtar _id som ISBN
-                            Title = g["BöckerInfo"][0]["Titel"].AsString,
-                            Stock = g["Antal"].AsInt32
-                        }).ToList()
-                    })
-                    .OrderBy(store => store.StoreName)
-                    .ToList();
-
-                // Kontrollera om det finns lagersaldo
-                if (filteredInventory.Count == 0)
-                {
-                    Console.WriteLine("Inga böcker finns i lagersaldo.");
+                    Console.WriteLine("Inga produkter hittades i sortimentet.");
                 }
                 else
                 {
-                    Console.WriteLine("Lagersaldo per bokhandel:");
-                    foreach (var store in filteredInventory)
+                    for (int i = 0; i < allProducts.Count; i++)
                     {
-                        Console.ForegroundColor = ConsoleColor.Green;
-                        Console.WriteLine($"Bokhandel: {store.StoreName}");
-                        Console.ResetColor();
+                        var product = allProducts[i];
+                        string name = product.Contains("name") ? product["name"].ToString() : "Okänd";
+                        string price = product.Contains("price") ? product["price"].ToString() : "0";
+                        string id = product.Contains("_id") ? product["_id"].ToString() : "Okänt ID";
 
-                        foreach (var book in store.Books)
-                        {
-                            // Kontrollera om ISBN, titel och antal är giltiga
-                            if (!string.IsNullOrEmpty(book.Isbn) && !string.IsNullOrEmpty(book.Title) && book.Stock > 0)
-                            {
-                                Console.ForegroundColor = ConsoleColor.White;
-                                Console.Write($"  ISBN: ");
-                                Console.ForegroundColor = ConsoleColor.DarkYellow;
-                                Console.Write($"{book.Isbn}, ");
-
-                                Console.ForegroundColor = ConsoleColor.White;
-                                Console.Write($"Titel: ");
-                                Console.ForegroundColor = ConsoleColor.Magenta;
-                                Console.Write($"{book.Title}");
-
-                                Console.ForegroundColor = ConsoleColor.White;
-                                Console.Write($", Antal: ");
-                                Console.ForegroundColor = ConsoleColor.Cyan;
-                                Console.WriteLine($"{book.Stock}");
-                            }
-                        }
-
-                        Console.WriteLine();
+                        // Utskrift med tabellstruktur (kolumner för Nr, namn, pris och ID)
+                        Console.WriteLine("{0,-5} {1,-25} {2,10} {3,24}", i + 1, name, price + " SEK", id);
                     }
                 }
+
+                Console.WriteLine("------------------------------------------------------------");
+
+                // Be användaren välja en produkt att lägga i kundvagnen
+                Console.Write("Ange produktens nummer för att lägga till i kundvagnen (eller tryck ENTER för att avsluta): ");
+                string input = Console.ReadLine();
+
+                if (string.IsNullOrWhiteSpace(input))
+                {
+                    Console.WriteLine("Avslutar utan att lägga till i kundvagnen.");
+                    return;
+                }
+
+                if (int.TryParse(input, out int productNumber) && productNumber > 0 && productNumber <= allProducts.Count)
+                {
+                    var selectedProduct = allProducts[productNumber - 1];
+                    kundvagn.Add(selectedProduct);
+                    Console.WriteLine($"Produkten \"{selectedProduct["name"]}\" har lagts till i din kundvagn.");
+                }
+                else
+                {
+                    Console.WriteLine("Felaktig inmatning. Vänligen ange ett giltigt produktnummer.");
+                }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Ett fel inträffade vid hämtning av lagersaldo: {ex.Message}");
+                Console.WriteLine($"Ett fel uppstod vid hämtning av sortimentet: {ex.Message}");
             }
-
-            Console.WriteLine("\nTryck på valfri tangent för att återgå till menyn...");
-            Console.ReadKey();
         }
 
-
-        public static async Task AddBookToStoreInventory()
+        public static void AddProductToStoreInventory()
         {
             try
             {
-                Console.WriteLine("📘 Ange titel på boken:");
-                string title = Console.ReadLine();
-                if (string.IsNullOrWhiteSpace(title))
+                var sortimentCollection = GetSortimentCollection();
+
+                // Be användaren att ange produktinformation
+                Console.Write("Ange produktens namn: ");
+                string productName = Console.ReadLine();
+
+                // Kontroll för tom inmatning
+                if (string.IsNullOrWhiteSpace(productName))
                 {
-                    Console.WriteLine("❌ Titel får inte vara tom.");
+                    Console.WriteLine("Produkten måste ha ett namn. Försök igen.");
                     return;
                 }
 
-                Console.WriteLine("👤 Ange författare:");
-                string author = Console.ReadLine();
-                if (string.IsNullOrWhiteSpace(author))
+                Console.Write("Ange produktens pris (SEK): ");
+                if (!decimal.TryParse(Console.ReadLine(), out decimal productPrice) || productPrice <= 0)
                 {
-                    Console.WriteLine("❌ Författare får inte vara tom.");
+                    Console.WriteLine("Felaktig prisinmatning. Priset måste vara ett positivt tal.");
                     return;
                 }
 
-                Console.WriteLine("💰 Ange pris:");
-                if (!decimal.TryParse(Console.ReadLine(), out decimal price))
+                // Skapa ett nytt dokument för produkten
+                var newProduct = new BsonDocument
                 {
-                    Console.WriteLine("❌ Ogiltigt pris. Försök igen.");
-                    return;
-                }
-
-                // Skapa en instans av den starkt typade klassen
-                var newBook = new Böcker
-                {
-                    ISBN = "9781234567891",  // Exempel på ISBN
-                    Titel = title,
-                    Författare = author,
-                    Pris = price,
-                    Utgivningsdatum = DateTime.Now  // Använd det aktuella datumet som exempel
+                    { "name", productName },
+                    { "price", productPrice }
                 };
 
-                // Infoga den starkt typade boken i samlingen
-                await booksCollection.InsertOneAsync(newBook);
-                Console.WriteLine("✅ Bok tillagd i lagret.");
+                // Lägg till produkten i sortimentet
+                sortimentCollection.InsertOne(newProduct);
+
+                Console.WriteLine("Produkten har lagts till i sortimentet:");
+                Console.WriteLine($"Namn: {productName}, Pris: {productPrice} SEK");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"⚠️ Ett fel uppstod: {ex.Message}");
+                Console.WriteLine($"Ett fel uppstod vid tillägg av produkten: {ex.Message}");
             }
         }
 
-
-        public static async Task RemoveBookFromInventory()
+        public static void RemoveProductFromInventory()
         {
             try
             {
-                Console.WriteLine("🗑️ Ange titeln på boken du vill ta bort:");
-                string title = Console.ReadLine();
-                if (string.IsNullOrWhiteSpace(title))
+                var sortimentCollection = GetSortimentCollection();
+
+                // Be användaren att ange produktens namn
+                Console.Write("Ange produktens namn som du vill ta bort: ");
+                string productName = Console.ReadLine();
+
+                // Kontroll för tom inmatning
+                if (string.IsNullOrWhiteSpace(productName))
                 {
-                    Console.WriteLine("❌ Titel får inte vara tom.");
+                    Console.WriteLine("Produkten måste ha ett namn. Försök igen.");
                     return;
                 }
 
-                // Skapa ett filter för att matcha boken baserat på titel
-                var filter = Builders<Böcker>.Filter.Eq(b => b.Titel, title);
+                // Skapa ett filter för att hitta produkten med det givna namnet
+                var filter = Builders<BsonDocument>.Filter.Eq("name", productName);
 
-                // Använd rätt samlingstyp och rätt filter
-                var result = await booksCollection.DeleteOneAsync(filter);
+                // Försök att ta bort produkten
+                var result = sortimentCollection.DeleteOne(filter);
 
                 if (result.DeletedCount > 0)
                 {
-                    Console.WriteLine("✅ Boken togs bort från lagret.");
+                    Console.WriteLine($"Produkten \"{productName}\" har tagits bort från sortimentet.");
                 }
                 else
                 {
-                    Console.WriteLine("❌ Ingen bok med den titeln hittades.");
+                    Console.WriteLine($"Produkten med namnet \"{productName}\" kunde inte hittas i sortimentet.");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"⚠️ Ett fel uppstod: {ex.Message}");
+                Console.WriteLine($"Ett fel uppstod vid borttagning av produkten: {ex.Message}");
             }
         }
 
-        public static async Task ListAllBooks()
+        public static void ViewCart()
         {
-            try
+            Console.WriteLine("\nProdukter i din kundvagn:");
+            Console.WriteLine("------------------------------------------------------------");
+            Console.WriteLine("{0,-25} {1,10} {2,24}", "Namn", "Pris (SEK)", "ID");
+            Console.WriteLine("------------------------------------------------------------");
+
+            if (kundvagn.Count == 0)
             {
-                Console.WriteLine("📚 Alla böcker i databasen:");
-                var books = await booksCollection.Find(new BsonDocument()).ToListAsync();
-                foreach (var book in books)
+                Console.WriteLine("Din kundvagn är tom.");
+            }
+            else
+            {
+                foreach (var product in kundvagn)
                 {
-                    Console.WriteLine(book.ToJson());
+                    string name = product.Contains("name") ? product["name"].ToString() : "Okänd";
+                    string price = product.Contains("price") ? product["price"].ToString() : "0";
+                    string id = product.Contains("_id") ? product["_id"].ToString() : "Okänt ID";
+
+                    // Utskrift med tabellstruktur (kolumner för namn, pris och ID)
+                    Console.WriteLine("{0,-25} {1,10} {2,24}", name, price + " SEK", id);
                 }
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"⚠️ Ett fel uppstod: {ex.Message}");
-            }
+
+            Console.WriteLine("------------------------------------------------------------");
         }
     }
 }
+
+
+    
+
 

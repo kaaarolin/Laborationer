@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Laboration_3_databaser;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
@@ -9,12 +10,6 @@ namespace Laboration_3_databaser
 {
     class Program
     {
-        // Länken till din MongoDB Atlas (Uppdatera med ditt användarnamn, lösenord och databas)
-        private static readonly string connectionString = "mongodb+srv://<username>:<password>@cluster0.mongodb.net/?retryWrites=true&w=majority";
-        private static readonly MongoClient client = new MongoClient(connectionString);
-        private static readonly IMongoDatabase database = client.GetDatabase("LaborationDatabase");
-        private static readonly IMongoCollection<BsonDocument> booksCollection = database.GetCollection<BsonDocument>("Books");
-
         public static void Main(string[] args)
         {
             while (true)
@@ -25,35 +20,42 @@ namespace Laboration_3_databaser
                 switch (choice)
                 {
                     case "1":
-                        Metoder.ListInventoryForStore();
+                        Metoder.ListInventory();
                         break;
                     case "2":
-                        Metoder.AddBookToStoreInventory();
+                        Metoder.AddProductToStoreInventory();
                         break;
                     case "3":
-                        Metoder.RemoveBookFromInventory();
+                        Metoder.RemoveProductFromInventory();
                         break;
                     case "4":
-                        Metoder.ListAllBooks();
+                        Metoder.ViewCart();
                         break;
-                    case "5":
-                        Console.WriteLine("Avslutar programmet...");
+                    case "0":
                         return;
                     default:
-                        Console.WriteLine("Ogiltigt val, försök igen.");
+                        Console.WriteLine("Ogiltigt val. Försök igen.");
                         break;
                 }
+
+                Console.WriteLine("Tryck på valfri tangent för att komma tillbaka till huvudmenyn...");
+                Console.ReadKey();
             }
         }
 
         static void ShowMainMenu()
         {
-            Console.WriteLine("Välj ett alternativ:");
-            Console.WriteLine("1. Lista lager för butiken");
-            Console.WriteLine("2. Lägg till en bok i lagret");
-            Console.WriteLine("3. Ta bort en bok från lagret");
-            Console.WriteLine("4. Lista alla böcker");
-            Console.WriteLine("5. Avsluta");
+            Console.Clear();
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine("Välkommen till Karolins butik! Välj ett alternativ: ");
+            Console.ResetColor();
+            Console.WriteLine("1. Lista sortiment");
+            Console.WriteLine("2. Lägg till produkter i sortiment");
+            Console.WriteLine("3. Ta bort produkter från sortiment");
+            Console.WriteLine("4. Se kundvagn");
+            Console.WriteLine("0. Avsluta");
         }
+
     }
+
 }
